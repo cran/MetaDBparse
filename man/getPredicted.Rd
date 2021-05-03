@@ -12,7 +12,8 @@ getPredicted(
   elements = c("C", "H", "N", "O", "P", "S"),
   search = c("PubChem", "ChemSpider"),
   detailed = TRUE,
-  calc_adducts = adducts[Ion_mode == mode, ]$Name
+  calc_adducts = adducts[Ion_mode == mode, ]$Name,
+  adduct_table = adducts
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ getPredicted(
 \item{detailed}{Look up details like description etc. if hit found? Makes things slower!, Default: TRUE}
 
 \item{calc_adducts}{Which adducts to consider?, Default: adducts[Ion_mode == mode, ]$Name}
+
+\item{adduct_table}{Adduct table to use, referred to by 'calc_adducts'. Allows use for custom 'adducts' such as in-source fragments etc.}
 }
 \value{
 Table of found matches and associated info

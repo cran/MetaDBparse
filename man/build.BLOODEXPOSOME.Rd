@@ -22,7 +22,7 @@ Parses the BLOOD EXPOSOME DB, returns data table with columns compoundname, desc
 }
 \seealso{
 \code{\link[utils]{download.file}}
- \code{\link[openxlsx]{read.xlsx}}
+ \code{\link[readxl]{read_xlsx}}
  \code{\link[pbapply]{pbapply}}
  \code{\link[jsonlite]{read_json}}
 }

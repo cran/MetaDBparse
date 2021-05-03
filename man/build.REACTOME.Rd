@@ -2,23 +2,35 @@
 % Please edit documentation in R/oxy-db_parsers.R
 \name{build.REACTOME}
 \alias{build.REACTOME}
+\alias{build.METABOLOMICSWORKBENCH}
 \title{Build REACTOME db}
 \usage{
 build.REACTOME(outfolder)
+
+build.METABOLOMICSWORKBENCH(outfolder)
 }
 \arguments{
 \item{outfolder}{Which folder to save temp files to?}
 }
 \value{
 data table with parsed database
+
+data table with parsed database
 }
 \description{
 Parses the REACTOME db, returns data table with columns compoundname, description, charge, formula and structure (in SMILES)
+
+Parses the METABOLOMICSWORKBENCH db, returns data table with columns compoundname, description, charge, formula and structure (in SMILES)
 }
 \examples{
 \dontrun{build.REACTOME(outfolder=tempdir())}
+\dontrun{build.METABOLOMICSWORKBENCH(outfolder=tempdir())}
 }
 \seealso{
+\code{\link[data.table]{as.data.table}}
+ \code{\link[rvest]{html_nodes}}
+ \code{\link[xml2]{read_html}}
+
 \code{\link[data.table]{as.data.table}}
  \code{\link[rvest]{html_nodes}}
  \code{\link[xml2]{read_html}}

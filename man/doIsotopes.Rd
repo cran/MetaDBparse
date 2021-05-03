@@ -4,12 +4,14 @@
 \alias{doIsotopes}
 \title{Generate isotopes for given formula}
 \usage{
-doIsotopes(formula, charge)
+doIsotopes(formula, charge, count.isos = F)
 }
 \arguments{
 \item{formula}{Molecular formula}
 
 \item{charge}{Final charge}
+
+\item{count.isos}{Add columns for amounts of 2H, 13C, 15N atoms? Useful for heavy isotope experiments.}
 }
 \value{
 Table with isotopes of this molecular formula

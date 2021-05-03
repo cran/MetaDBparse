@@ -3,7 +3,7 @@
 \docType{data}
 \name{isotopes}
 \alias{isotopes}
-\title{Weights of all isotopes of all elemnts used}
+\title{Weights of all isotopes of all elements used}
 \format{
 An object of class \code{data.frame} with 308 rows and 5 columns.
 }

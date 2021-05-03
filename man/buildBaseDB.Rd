@@ -14,13 +14,14 @@ buildBaseDB(
   test = FALSE,
   doBT = FALSE,
   btOpts = "phaseII:1",
-  btLoc
+  btLoc,
+  skipClean = F
 )
 }
 \arguments{
 \item{outfolder}{In which folder are you building your databases? Temp folders etc. will be put here.}
 
-\item{dbname}{Which database do you want to build? Options: chebi,maconda,kegg,bloodexposome,dimedb,expoexplorer, foodb, drugbank, lipidmaps, massbank, metabolights, metacyc, phenolexplorer, respect, wikidata, wikipathways, t3db, vmh, hmdb, smpdb, lmdb, ymdb, ecmdb, bmdb, rmdb, stoff, nanpdb, mcdb, mvoc, pamdb}
+\item{dbname}{Which database do you want to build? Options: chebi,maconda,kegg,bloodexposome,dimedb,expoexplorer, foodb, drugbank, lipidmaps, massbank, metabolights, metacyc, phenolexplorer, respect, wikidata, wikipathways, t3db, vmh, hmdb, smpdb, lmdb, ymdb, ecmdb, bmdb, rmdb, stoff, anpdb, mcdb, mvoc, pamdb}
 
 \item{custom_csv_path}{PARAM_DESCRIPTION, Default: NULL}
 
@@ -37,6 +38,8 @@ buildBaseDB(
 \item{btOpts}{Biotransfomer -q options. Defaults to phase II transformation only.}
 
 \item{btLoc}{Location of Biotransformer JAR file. Needs to be executable!}
+
+\item{skipClean}{Skip cleaning step? Cleaning step uses SMILES to acquire formula, charge, and transforms SMILES into 'smitype' dialect.}
 }
 \value{
 Nothing, writes SQLite database to 'outfolder'.

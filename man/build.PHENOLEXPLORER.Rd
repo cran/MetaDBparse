@@ -24,6 +24,6 @@ Parses the PHENOL EXPLORER DB, returns data table with columns compoundname, des
 \code{\link[RCurl]{getURL}}
  \code{\link[stringr]{str_match}}
  \code{\link[utils]{download.file}},\code{\link[utils]{unzip}}
- \code{\link[openxlsx]{read.xlsx}}
+ \code{\link[readxl]{read_xlsx}}
  \code{\link[data.table]{fread}}
 }

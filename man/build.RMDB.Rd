@@ -2,7 +2,7 @@
 % Please edit documentation in R/oxy-db_parsers.R
 \name{build.RMDB}
 \alias{build.RMDB}
-\title{Build RMDB}
+\title{Build RMDB (deprecated)}
 \usage{
 build.RMDB(outfolder, testMode = FALSE)
 }
@@ -12,17 +12,11 @@ build.RMDB(outfolder, testMode = FALSE)
 \item{testMode}{run in test mode? Only parses first ten compounds}
 }
 \value{
-data table with parsed database
+Message that RMDB is deprecated
 }
 \description{
 Parses the RMDB, returns data table with columns compoundname, description, charge, formula and structure (in SMILES)
 }
 \examples{
 \dontrun{build.RMDB(outfolder=tempdir(), testMode=TRUE)}
-}
-\seealso{
-\code{\link[utils]{download.file}}
- \code{\link[stringr]{str_split}},\code{\link[stringr]{str_extract}},\code{\link[stringr]{str_match}}
- \code{\link[pbapply]{pbapply}}
- \code{\link[data.table]{rbindlist}}
 }

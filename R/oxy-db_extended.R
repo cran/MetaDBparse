@@ -234,6 +234,7 @@ doAdduct <- function(structure, formula, charge, adduct_table, query_adduct) {
 #' @description Takes in formula and returns isotope pattern m/z values.
 #' @param formula Molecular formula
 #' @param charge Final charge
+#' @param count.isos Add columns for amounts of 2H, 13C, 15N atoms? Useful for heavy isotope experiments.
 #' @return Table with isotopes of this molecular formula
 #' @examples
 #'  doIsotopes(formula="C6H12O6", charge=0)
@@ -243,18 +244,32 @@ doAdduct <- function(structure, formula, charge, adduct_table, query_adduct) {
 #' @export
 #' @importFrom enviPat isopattern
 #' @importFrom data.table data.table
-doIsotopes <- function(formula, charge) {
-  isotables <- enviPat::isopattern(isotopes, formula, threshold = 0.1, plotit = FALSE, charge = charge, verbose = FALSE, )
+doIsotopes <- function(formula, charge, count.isos=F) {
+
+  # note these specifically: 2H, 13C, and 15N
+
+  isotables <- enviPat::isopattern(isotopes, formula, threshold = 0.1, plotit = FALSE, charge = charge, verbose = FALSE)
+
   isolist <- lapply(isotables, function(isotable) {
     if (isotable[[1]] == "error") {
       return(data.table())
     }
-    iso.dt <- data.table::data.table(isotable, fill = TRUE)
-    result <- iso.dt[, 1:2]
-    names(result) <- c("fullmz", "isoprevalence")
+    iso.dt <- data.table::data.table(isotable)
+    if(count.isos){
+      for(iso in c("2H","13C", "15N")){
+        if(iso %in% colnames(iso.dt)){
+          iso.dt[[paste0("n",iso)]] <- iso.dt[[iso]]
+        }else{
+          iso.dt[[paste0("n",iso)]] <- c(0)
+        }
+      }
+    }
+    result <- iso.dt[, c(c("m/z","abundance"), if(count.isos) c("n2H","n13C", "n15N") else c()), with=F]
+    names(result) <- c(c("fullmz", "isoprevalence"), if(count.isos) c("n2H","n13C", "n15N") else c())
     result
   })
   isolist.nonas <- isolist[!is.na(isolist)]
+  print(isolist.nonas[[1]])
   isotable <- data.table::rbindlist(isolist.nonas)
   keep.isos <- names(isolist.nonas)
   charges <- charge[!is.na(isolist)]
@@ -276,6 +291,8 @@ doIsotopes <- function(formula, charge) {
 #' @param adduct_rules Adduct rule table, Default: adduct_rules
 #' @param silent Silence warnings?, Default: silent
 #' @param use.rules Use adduct rules?, Default: TRUE
+#' @param all.isos Include and calculate all isotopes? (if FALSE, only takes the 100/main isotope).
+#' @param count.isos Add columns for amounts of 2H, 13C, 15N atoms? Useful for heavy isotope experiments.
 #' @seealso
 #'  \code{\link[RSQLite]{SQLite}}
 #'  \code{\link[gsubfn]{fn}}
@@ -299,13 +316,27 @@ doIsotopes <- function(formula, charge) {
 #' @importFrom DBI dbWriteTable
 #' @importFrom pbapply pblapply pbsapply
 #' @importFrom enviPat check_chemform
-buildExtDB <- function(outfolder, ext.dbname = "extended", base.dbname, cl = 0, blocksize = 600, mzrange = c(60, 600), adduct_table = adducts, adduct_rules = adduct_rules, silent = silent, use.rules = TRUE) {
-  Name <- charge <- ..add <- NULL
+buildExtDB <- function(outfolder, ext.dbname = "extended", base.dbname, cl = 0,
+                       blocksize = 600, mzrange = c(60, 600), adduct_table = adducts,
+                       adduct_rules = adduct_rules, silent = silent, use.rules = TRUE,
+                       count.isos = F, all.isos = T) {
+  Name <- charge <- ..add <- ..keepcols <- NULL
   outfolder <- normalizePath(outfolder)
   print(paste("Will calculate adducts + isotopes for the", base.dbname, "database."))
   full.db <- file.path(outfolder, paste0(ext.dbname, ".db"))
   first.db <- !file.exists(full.db)
   full.conn <- RSQLite::dbConnect(RSQLite::SQLite(), full.db)
+  if(!first.db){
+    cols = RSQLite::dbListFields(full.conn,"extended")
+    if("n2H" %in% cols & count.isos == F){
+      print("Cannot only build a singular DB without heavy atom counts. Reverting to default settings...")
+      count.isos = T
+    }
+    if(!("n2H" %in% cols) & count.isos == T){
+      print("Cannot only build a singular DB with heavy atom counts. Reverting to default settings...")
+      count.isos = F
+    }
+  }
   tempdir <- file.path(outfolder, paste0(ext.dbname, "_inprogress"))
   if (dir.exists(tempdir)) {
     tmpfiles.ext <- list.files(tempdir, full.names = TRUE, pattern = "_ext_")
@@ -340,13 +371,16 @@ buildExtDB <- function(outfolder, ext.dbname = "extended", base.dbname, cl = 0, 
   else {
     new_adducts <- adducts$Name
   }
-  RSQLite::dbExecute(full.conn, strwrap("CREATE TABLE IF NOT EXISTS extended(
+  #"n2H", "n13C", "n15N"
+  extras = if(count.isos) ",n2H int,n13C int,n15N int" else ""
+  RSQLite::dbExecute(full.conn, gsubfn::fn$paste(strwrap("CREATE TABLE IF NOT EXISTS extended(
                                         struct_id INT,
                                         fullformula text,
                                         finalcharge text,
                                         fullmz decimal(30,13),
                                         adduct text,
-                                        isoprevalence float)", width = 10000, simplify = TRUE))
+                                        isoprevalence float
+                                        $extras)", width = 10000, simplify = TRUE)))
   RSQLite::dbExecute(full.conn, gsubfn::fn$paste("PRAGMA auto_vacuum = 1;"))
   base.db <- normalizePath(file.path(outfolder, paste0(base.dbname, ".db")))
   RSQLite::dbExecute(full.conn, gsubfn::fn$paste("ATTACH '$base.db' AS tmp"))
@@ -413,7 +447,6 @@ buildExtDB <- function(outfolder, ext.dbname = "extended", base.dbname, cl = 0, 
   tmpfiles.struct <- sapply(1:length(blocks), function(i) file.path(tempdir, paste0(base.dbname, "_str_", i, ".csv")))
   RSQLite::dbDisconnect(full.conn)
   per.adduct.tables <- pbapply::pblapply(1:length(blocks), cl = cl, function(i, mzrange = mzrange, silent = silent, blocks = blocks, adduct_table = adduct_table, adduct_rules = adduct_rules, tmpfiles.ext = tmpfiles.ext, tmpfiles.struct = tmpfiles.struct, mapper = mapper, use.rules = use.rules) {
-    print(i)
     block <- blocks[[i]]
     deut <- grep(block$baseformula, pattern = "D")
     if (length(deut) > 0) {
@@ -462,19 +495,56 @@ buildExtDB <- function(outfolder, ext.dbname = "extended", base.dbname, cl = 0, 
         return(data.table::data.table())
       }
       else {
-        isotable <- doIsotopes(formula = adducted[keepers, ]$final, charge = adducted[keepers, ]$final.charge)
-        formula_plus_iso <- merge(adducted, isotable, by = c("final", "final.charge"), allow.cartesian = TRUE)
-        adducted.plus.isotopes <- merge(adducted, formula_plus_iso, by = c("baseformula", "charge", "adducted", "final.charge", "final", "structure"), allow.cartesian = TRUE)
-        meta.table <- data.table::data.table(fullmz = adducted.plus.isotopes$fullmz, fullformula = adducted.plus.isotopes$final, finalcharge = adducted.plus.isotopes$final.charge, adduct = c(add), isoprevalence = adducted.plus.isotopes$isoprevalence, structure = adducted.plus.isotopes$structure)
-        ids <- mapper$struct_id[match(meta.table$structure, mapper$smiles)]
+        if(all.isos){
+          isotable <- doIsotopes(formula = adducted[keepers, ]$final,
+                                 charge = adducted[keepers, ]$final.charge,
+                                 count.isos = count.isos)
+        }else {
+          # names(result) <- c(c("fullmz", "isoprevalence"), if(count.isos) c("n2H","n13C", "n15N") else c())
+          isotable = data.table::data.table(fullmz = checked[keepers, ]$mz,
+                                            isoprevalence = c(100),
+                                            final = adducted[keepers, ]$final,
+                                            final.charge = adducted[keepers, ]$final.charge)
+          if(count.isos) isotable$n2H <- isotable$n13C <- isotable$n15N <- c(0)
+        }
+
+        formula_plus_iso <- merge(adducted,
+                                  isotable,
+                                  by = c("final", "final.charge"),
+                                  allow.cartesian = TRUE)
+        adducted.plus.isotopes <- merge(adducted,
+                                        formula_plus_iso,
+                                        by = c("baseformula", "charge", "adducted",
+                                               "final.charge", "final", "structure"),
+                                        allow.cartesian = TRUE)
+        meta.table <- data.table::data.table(fullmz = adducted.plus.isotopes$fullmz,
+                                             fullformula = adducted.plus.isotopes$final,
+                                             finalcharge = adducted.plus.isotopes$final.charge,
+                                             adduct = c(add),
+                                             isoprevalence = adducted.plus.isotopes$isoprevalence,
+                                             structure = adducted.plus.isotopes$structure)
+        if(count.isos){
+          meta.table$n13C <- adducted.plus.isotopes$n13C
+          meta.table$n2H <- adducted.plus.isotopes$n2H
+          meta.table$n15N <- adducted.plus.isotopes$n15N
+        }
+
+        ids <- mapper$struct_id[match(meta.table$structure,
+                                      mapper$smiles)]
         meta.table$struct_id <- ids
-        return(unique(meta.table[, -"structure"]))
+        res = unique(meta.table[, -"structure"])
+        return(res)
       }
     })
     to.write <- data.table::rbindlist(per.adduct.tables)
+    to.write <<- to.write
     if (nrow(to.write) > 0) {
       structs <- unique(blocks[[i]][, c("struct_id", "smiles")])
-      data.table::fwrite(to.write[, c("struct_id", "fullformula", "finalcharge", "fullmz", "adduct", "isoprevalence")], file = tmpfiles.ext[i], append = FALSE)
+      keepcols = c("struct_id", "fullformula", "finalcharge",
+                   "fullmz", "adduct", "isoprevalence",
+                   if(count.isos) c("n2H","n13C","n15N") else c())
+      data.table::fwrite(to.write[, ..keepcols],
+                         file = tmpfiles.ext[i], append = FALSE)
       if (!adduct_only) {
         data.table::fwrite(structs, file = tmpfiles.struct[i], append = FALSE)
       }

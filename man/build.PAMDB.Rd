@@ -23,7 +23,7 @@ Parses the PAMDB, returns data table with columns compoundname, description, cha
 \seealso{
 \code{\link[utils]{download.file}}
  \code{\link[data.table]{as.data.table}}
- \code{\link[readxl]{read_excel}}
+ \code{\link[readxl]{read_xlsx}}
  \code{\link[RCurl]{getURL}}
  \code{\link[stringr]{str_match}}
 }

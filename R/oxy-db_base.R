@@ -14,6 +14,7 @@
 #' @importFrom rJava .jcall
 smiles.to.iatom <- function(smiles, silent = TRUE, cl = 0) {
   iatoms <- sapply(smiles, function(x, silent) {
+    #print(x)
     mol <- NULL
     try(
       {
@@ -35,8 +36,7 @@ smiles.to.iatom <- function(smiles, silent = TRUE, cl = 0) {
         } else {
           fun()
         }
-      },
-      silent = silent
+      }
     )
     mol
   }, silent = silent)
@@ -198,7 +198,9 @@ iatom.to.formula <- function(iatoms, silent = TRUE) {
 cleanDB <- function(db.formatted, cl, silent = TRUE, blocksize, smitype = "Canonical") {
   blocks <- split(1:nrow(db.formatted), ceiling(seq_along(1:nrow(db.formatted)) / blocksize))
   if (is.list(cl)) {
-    parallel::clusterExport(cl, varlist = c("db.formatted", "iatom.to.smiles", "smiles.to.iatom", "iatom.to.formula", "iatom.to.charge", "silent", "isotopes"), envir = environment())
+    parallel::clusterExport(cl, varlist = c("db.formatted", "iatom.to.smiles",
+                                            "smiles.to.iatom", "iatom.to.formula",
+                                            "iatom.to.charge", "silent", "isotopes"), envir = environment())
   }
   print("Uniformizing formulas/SMILES/charges and checking for mistakes...")
   db.fixed.rows <- pbapply::pblapply(blocks, cl = cl, function(block) {
@@ -235,7 +237,7 @@ cleanDB <- function(db.formatted, cl, silent = TRUE, blocksize, smitype = "Canon
 #' @title Build the base database
 #' @description This is a large wrapper function that calls upon all individual database parsers, cleans the resulting database and saves it in a SQLite database.
 #' @param outfolder In which folder are you building your databases? Temp folders etc. will be put here.
-#' @param dbname Which database do you want to build? Options: chebi,maconda,kegg,bloodexposome,dimedb,expoexplorer, foodb, drugbank, lipidmaps, massbank, metabolights, metacyc, phenolexplorer, respect, wikidata, wikipathways, t3db, vmh, hmdb, smpdb, lmdb, ymdb, ecmdb, bmdb, rmdb, stoff, nanpdb, mcdb, mvoc, pamdb
+#' @param dbname Which database do you want to build? Options: chebi,maconda,kegg,bloodexposome,dimedb,expoexplorer, foodb, drugbank, lipidmaps, massbank, metabolights, metacyc, phenolexplorer, respect, wikidata, wikipathways, t3db, vmh, hmdb, smpdb, lmdb, ymdb, ecmdb, bmdb, rmdb, stoff, anpdb, mcdb, mvoc, pamdb
 #' @param custom_csv_path PARAM_DESCRIPTION, Default: NULL
 #' @param smitype Which SMILES format do you want?, Default: 'Canonical'
 #' @param silent Suppress warnings?, Default: TRUE
@@ -244,6 +246,7 @@ cleanDB <- function(db.formatted, cl, silent = TRUE, blocksize, smitype = "Canon
 #' @param doBT Do a biotransformation step using Biotransformer?
 #' @param btOpts Biotransfomer -q options. Defaults to phase II transformation only.
 #' @param btLoc Location of Biotransformer JAR file. Needs to be executable!
+#' @param skipClean Skip cleaning step? Cleaning step uses SMILES to acquire formula, charge, and transforms SMILES into 'smitype' dialect.
 #' @return Nothing, writes SQLite database to 'outfolder'.
 #' @seealso
 #'  \code{\link[data.table]{fread}},\code{\link[data.table]{as.data.table}}
@@ -255,22 +258,42 @@ cleanDB <- function(db.formatted, cl, silent = TRUE, blocksize, smitype = "Canon
 #' @importFrom data.table fread as.data.table data.table
 #' @importFrom RSQLite dbExecute
 #' @importFrom DBI dbDisconnect
-buildBaseDB <- function(outfolder, dbname, custom_csv_path = NULL, smitype = "Canonical", silent = TRUE, cl = 0, test = FALSE, doBT = FALSE, btOpts = "phaseII:1", btLoc) {
+buildBaseDB <- function(outfolder, dbname, custom_csv_path = NULL, smitype = "Canonical",
+                        silent = TRUE, cl = 0, test = FALSE, doBT = FALSE, btOpts = "phaseII:1", btLoc, skipClean=F) {
   httr::set_config(httr::config(ssl_verifypeer = 0))
+  oldpar <- options()
+  options(stringsAsFactors = FALSE, timeout=1000)
+  on.exit(options(oldpar))
   removeDB(outfolder, paste0(dbname, ".db"))
   conn <- openBaseDB(outfolder, paste0(dbname, ".db"))
   if (is.null(custom_csv_path)) {
-    db.formatted.all <- switch(dbname, chebi = build.CHEBI(outfolder), maconda = build.MACONDA(outfolder, conn), kegg = build.KEGG(outfolder), bloodexposome = build.BLOODEXPOSOME(outfolder), dimedb = build.DIMEDB(outfolder), expoexplorer = build.EXPOSOMEEXPLORER(outfolder), foodb = build.FOODB(outfolder), drugbank = build.DRUGBANK(outfolder), lipidmaps = build.LIPIDMAPS(outfolder), massbank = build.MASSBANK(outfolder), metabolights = build.METABOLIGHTS(outfolder), metacyc = build.METACYC(outfolder),
-                               phenolexplorer = build.PHENOLEXPLORER(outfolder), respect = build.RESPECT(outfolder), wikidata = build.WIKIDATA(outfolder), wikipathways = build.WIKIPATHWAYS(outfolder), t3db = build.T3DB(outfolder), vmh = build.VMH(outfolder), hmdb = build.HMDB(outfolder), smpdb = build.SMPDB(outfolder), lmdb = build.LMDB(outfolder), ymdb = build.YMDB(outfolder), ecmdb = build.ECMDB(outfolder), bmdb = build.BMDB(outfolder), rmdb = build.RMDB(outfolder), stoff = build.STOFF(outfolder), nanpdb = build.NANPDB(outfolder),
-                               mcdb = build.MCDB(outfolder), mvoc = build.mVOC(outfolder), pamdb = build.PAMDB(outfolder), pharmgkb = build.PHARMGKB(outfolder), reactome = build.REACTOME(outfolder)
+    db.error = simpleError(paste(toupper(dbname), "not available. Please submit an issue to the joannawolthuis/MetaDBparse GitHub repository."))
+    db.formatted.all <- tryCatch(switch(dbname, chebi = build.CHEBI(outfolder),
+                                        maconda = build.MACONDA(outfolder, conn), kegg = build.KEGG(outfolder),
+                                        bloodexposome = build.BLOODEXPOSOME(outfolder), dimedb = build.DIMEDB(outfolder),
+                                        expoexplorer = build.EXPOSOMEEXPLORER(outfolder), foodb = build.FOODB(outfolder),
+                                        drugbank = build.DRUGBANK(outfolder), lipidmaps = build.LIPIDMAPS(outfolder),
+                                        massbank = build.MASSBANK(outfolder), metabolights = build.METABOLIGHTS(outfolder),
+                                        metacyc = build.METACYC(outfolder),
+                                        phenolexplorer = build.PHENOLEXPLORER(outfolder),
+                                        respect = build.RESPECT(outfolder), wikidata = build.WIKIDATA(outfolder), wikipathways = build.WIKIPATHWAYS(outfolder), t3db = build.T3DB(outfolder), vmh = build.VMH(outfolder), hmdb = build.HMDB(outfolder), smpdb = build.SMPDB(outfolder), lmdb = build.LMDB(outfolder), ymdb = build.YMDB(outfolder), ecmdb = build.ECMDB(outfolder), bmdb = build.BMDB(outfolder), rmdb = build.RMDB(outfolder), stoff = build.STOFF(outfolder), anpdb = build.ANPDB(outfolder),
+                                        mcdb = build.MCDB(outfolder), mvoc = build.mVOC(outfolder),
+                                        pamdb = build.PAMDB(outfolder), pharmgkb = build.PHARMGKB(outfolder),
+                                        reactome = build.REACTOME(outfolder),
+                                        metabolomicsworkbench = build.METABOLOMICSWORKBENCH(outfolder),
+                                 error = function(e) e,
+                                 finally = data.table::data.table())
     )
-  }
-  else {
+    if(is.null(db.formatted.all)){
+      stop("This DB is not included in MetaDBparse (anymore).")
+    }
+  } else {
     db.formatted.all <- list(db = data.table::fread(custom_csv_path, header = TRUE), version = Sys.time())
   }
   if (dbname == "maconda") {
     return(NA)
   }
+
   db.formatted <- data.table::as.data.table(db.formatted.all$db)
   db.formatted <- data.frame(lapply(db.formatted, as.character), stringsAsFactors = FALSE)
   if (test & nrow(db.formatted > 10)) {
@@ -301,15 +324,29 @@ buildBaseDB <- function(outfolder, dbname, custom_csv_path = NULL, smitype = "Ca
       db.formatted <- data.table::rbindlist(list(db.formatted, db.biotrans.fin), use.names = TRUE)
     }
   }
-  if (dbname %in% c("reactome", "wikipathways")) {
-    db.final <- db.formatted
+
+  if(all(is.na(db.formatted$structure))) skipClean = T
+
+  if(!skipClean){
+    db.formatted <- db.formatted[!(db.formatted$structure %in% c(NA,"")),]
+    db.final <- data.table::as.data.table(cleanDB(db.formatted,
+                                                  cl = cl,
+                                                  silent = silent,
+                                                  blocksize = 400))
+  }else{
+    db.final = data.table::as.data.table(db.formatted)
+    db.final$structure = paste0("[", db.final$baseformula, "]", db.final$charge)
   }
-  else {
-    db.final <- data.table::as.data.table(cleanDB(db.formatted, cl = cl, silent = silent, blocksize = 400))
-  }
+
+  print("Preview:")
+  print(head(db.final))
+
   db.final <- db.final[, lapply(.SD, as.character)]
   writeDB(conn, data.table::data.table(date = Sys.Date(), version = db.formatted.all$version), "metadata")
   writeDB(conn, table = db.final, "base")
+  if("path" %in% names(db.formatted.all)){
+    writeDB(conn, table = db.formatted.all$path, "pathways")
+  }
   RSQLite::dbExecute(conn, "CREATE INDEX b_idx1 ON base(structure)")
   DBI::dbDisconnect(conn)
 }

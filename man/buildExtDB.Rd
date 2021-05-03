@@ -14,7 +14,9 @@ buildExtDB(
   adduct_table = adducts,
   adduct_rules = adduct_rules,
   silent = silent,
-  use.rules = TRUE
+  use.rules = TRUE,
+  count.isos = F,
+  all.isos = T
 )
 }
 \arguments{
@@ -37,6 +39,10 @@ buildExtDB(
 \item{silent}{Silence warnings?, Default: silent}
 
 \item{use.rules}{Use adduct rules?, Default: TRUE}
+
+\item{count.isos}{Add columns for amounts of 2H, 13C, 15N atoms? Useful for heavy isotope experiments.}
+
+\item{all.isos}{Include and calculate all isotopes? (if FALSE, only takes the 100/main isotope).}
 }
 \description{
 Wrapper function that takes a base database, an existing (or not) external database, and fills the extended database with adduct and isotope variants of the compounds in the base database.
